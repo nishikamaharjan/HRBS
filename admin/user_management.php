@@ -11,8 +11,8 @@ include '../config.php';
 // Check if user is logged in and is admin
 if (!isset($_SESSION['user_id']) || $_SESSION['role'] !== 'Admin') {
     header("Location: ../login/login.php");
-//     exit;
-// }
+    exit;
+}
 
 // Fetch all users
 $usersQuery = $conn->query("SELECT * FROM users ORDER BY created_at DESC");
