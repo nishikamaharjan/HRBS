@@ -4,81 +4,100 @@ $success_message = '';
 $error_message = '';
 
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+
     $fullName = $_POST['full_name'];
     $email = $_POST['email'];
     $phone = $_POST['phone_number'];
     $dob = $_POST['dob'];
-    $gen = $_POST['gender']; // Renamed to avoid confusion with valid variable if needed, but original code used $gender
     $gender = $_POST['gender'];
     $password = trim($_POST['password']);
     $confirmPassword = trim($_POST['confirm_password']);
 
-    // Validate name (only letters and spaces)
+    // Validation
     if (!preg_match('/^[a-zA-Z\s]+$/', $fullName)) {
-        $error_message = "Full name should only contain letters and spaces.";
-    }
-    // Validate date of birth (not today or future)
-    elseif (!empty($dob)) {
+        $error_message = "Full name must contain only letters and spaces.";
+    } elseif (!empty($dob)) {
         $current_date = new DateTime('now');
         $dob_date = new DateTime($dob);
         if ($dob_date >= $current_date) {
             $error_message = "Date of birth cannot be today or in the future.";
         }
     }
-    
-    // Validate phone number (only digits, exactly 10 characters)
+
     if (empty($error_message) && !preg_match('/^\d{10}$/', $phone)) {
-        $error_message = "Invalid phone number. It should contain exactly 10 digits.";
+        $error_message = "Phone number must be exactly 10 digits.";
     }
-    
-    // Validate password (minimum 6 characters)
+
     if (empty($error_message) && strlen($password) < 6) {
-        $error_message = "Password must be at least 6 characters long.";
+        $error_message = "Password must be at least 6 characters.";
     }
-    
-    // Password must match confirmation
+
     if (empty($error_message) && $password !== $confirmPassword) {
         $error_message = "Passwords do not match.";
     }
-    
-    // If no validation errors, proceed with database operations
+
     if (empty($error_message)) {
-        // Database connection
         include '../config.php';
 
-        // Check if email already exists
-        $stmt = $conn->prepare("SELECT id FROM users WHERE email = ?");
-        $stmt->bind_param("s", $email);
-        $stmt->execute();
-        $stmt->store_result();
+        // Ensure proper charset for password storage
+        $conn->set_charset("utf8mb4");
 
-        if ($stmt->num_rows > 0) {
-            $error_message = "Email is already registered.";
-        } else {
-            if ($stmt->num_rows > 0) {
-                $error_message = "Email is already registered.";
+        // Does email already exist?
+        $check = $conn->prepare("SELECT id FROM users WHERE email = ?");
+        $check->bind_param("s", $email);
+        $check->execute();
+        $check->store_result();
+
+        // Generate hash using BCRYPT explicitly
+        $hashedPassword = password_hash($password, PASSWORD_BCRYPT);
+
+        // If user exists → UPDATE instead of INSERT
+        if ($check->num_rows > 0) {
+
+            $update = $conn->prepare(
+                "UPDATE users 
+                 SET full_name=?, phone_number=?, dob=?, gender=?, password=? 
+                 WHERE email=?"
+            );
+
+            $update->bind_param("ssssss", 
+                $fullName, $phone, $dob, $gender, $hashedPassword, $email
+            );
+
+            if ($update->execute()) {
+                $success_message = "Account updated successfully! You can log in now.";
             } else {
-                // Hash the password
-                $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
-
-                // Insert user into database
-                $stmt = $conn->prepare("INSERT INTO users (full_name, email, phone_number, dob, gender, password) VALUES (?, ?, ?, ?, ?, ?)");
-                $stmt->bind_param("ssssss", $fullName, $email, $phone, $dob, $gender, $hashedPassword);
-
-                if ($stmt->execute()) {
-                    $success_message = "Registration successful please login";
-                } else {
-                    $error_message = "Error: " . $stmt->error;
-                }
+                $error_message = "Update failed: " . $update->error;
             }
 
-            // Close connection
-            $stmt->close();
-            $conn->close();
+            $update->close();
+
+        } else {
+
+            $insert = $conn->prepare(
+                "INSERT INTO users (full_name, email, phone_number, dob, gender, password) 
+                 VALUES (?, ?, ?, ?, ?, ?)"
+            );
+
+            $insert->bind_param("ssssss", 
+                $fullName, $email, $phone, $dob, $gender, $hashedPassword
+            );
+
+            if ($insert->execute()) {
+                $success_message = "Registration successful! Please log in.";
+            } else {
+                $error_message = "Insert failed: " . $insert->error;
+            }
+
+            $insert->close();
         }
+
+        $check->close();
+        $conn->close();
     }
 }
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>

@@ -1,20 +1,26 @@
 <?php
-$host = 'localhost';
-$dbname = 'hrs';
-$username = 'root';
-$password = '';
-
-try {
-    $conn = new mysqli($host, $username, $password, $dbname);
+// Database connection - uses local variables to avoid conflicts
+function getDbConnection() {
+    static $conn = null;
     
-    if ($conn->connect_error) {
-        throw new Exception("Connection failed: " . $conn->connect_error);
+    if ($conn === null) {
+        $host = 'localhost';
+        $dbname = 'hrs';
+        $username = 'root';
+        $db_password = '';
+        
+        $conn = new mysqli($host, $username, $db_password, $dbname);
+        
+        if ($conn->connect_error) {
+            die("Connection failed: " . $conn->connect_error);
+        }
+        
+        $conn->set_charset("utf8mb4");
     }
     
-    // Set charset to utf8mb4
-    $conn->set_charset("utf8mb4");
-    
-} catch (Exception $e) {
-    die("Database connection failed: " . $e->getMessage());
+    return $conn;
 }
+
+// For backward compatibility
+$conn = getDbConnection();
 ?>
